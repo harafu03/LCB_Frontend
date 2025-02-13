@@ -7,14 +7,14 @@ const routes: any[] = [
     component: () => import('./views/Home.vue'),
   },
   {
-    path: '/board',
+    path: '/board/:id',
     name: 'Board',
     component: () => import('./views/board/BoardView.vue'),
   },
-]
+];
 const router = createRouter({
   history: createWebHistory(),
   routes,
-})
+});
 
-export default router
+export default router;

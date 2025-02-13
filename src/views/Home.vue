@@ -2,6 +2,7 @@
 import router from '../router';
 </script>
 <template>
- 시발 홈
- <button @click="router.push({name: 'Board'})">게시판</button>
+  <button @click="router.push({name: 'Board', params: {id: 111}})">
+    야구갤
+  </button>
 </template>

@@ -18,9 +18,7 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error),
 );
 
 // 응답 인터셉터 (응답 받았을 때 실행)
@@ -29,7 +27,7 @@ api.interceptors.response.use(
   (error) => {
     console.error('API 오류 발생:', error);
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

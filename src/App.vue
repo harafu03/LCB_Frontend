@@ -2,8 +2,13 @@
 </script>
 
 <template>
-  <router-view/>
+  <router-view />
 </template>
 
-<style scoped>
+<style>
+html, body {
+  height: 100vh;
+  background-color: rgb(42, 43, 43);
+  color: #fff;
+}
 </style>
