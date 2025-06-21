@@ -1,46 +1,26 @@
 <template>
-  <div class="flex rounded-md flex-col h-full bg-gray-800">
-    <!-- 채팅 리스트 -->
-    <div
-      ref="chatList"
-      class="flex-1 grow-4 overflow-y-auto p-6 text-gray-300 space-y-4"
-    >
-      <div
-        v-for="(msg, index) in messages"
-        :key="index"
-        class="message"
-      >
-        {{ "(11.11)" }}  {{ msg }}
-      </div> <!-- 실제 채팅 내용이 들어갈 부분 -->
+  <div class="flex flex-col h-full bg-white text-gray-800">
+    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+      <div v-for="(message, index) in messages" :key="index" class="flex flex-col" :class="message.isMine ? 'items-end' : 'items-start'">
+        <div class="text-xs text-gray-500 mb-1">
+          {{ message.author }} - {{ new Date(message.createdAt).toLocaleTimeString() }}
+        </div>
+        <div class="inline-block p-3 rounded-lg max-w-xs" :class="message.isMine ? 'bg-blue-500 text-white' : 'bg-gray-100'">
+          <p class="text-sm">{{ message.text }}</p>
+        </div>
+      </div>
     </div>
-
-    <!-- 메시지 입력 영역 (고정된 하단) -->
-    <div class="flex grow-1 justify-between items-end space-x-3 p-4 bg-gray-800 border-t border-gray-700">
-      <input
-        id="chat"
-        v-model="message"
-        rows="1"
-        class="flex-1 block p-3 text-sm text-gray-900 bg-gray-700 rounded-lg border border-gray-600 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-        placeholder="메시지를 입력하세요..."
-        @keydown.enter="sendMessage"
-      />
-
-      <div class="flex items-center space-x-3">
-        <!-- 전송 버튼 -->
-        <button
-          type="submit"
-          class="p-2 text-blue-600 rounded-full cursor-pointer hover:bg-blue-100 dark:text-blue-500 dark:hover:bg-gray-600"
-          @click="sendMessage"
-        >
-          <svg
-            class="w-5 h-5 rotate-90 rtl:-rotate-90"
-            aria-hidden="true"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="currentColor"
-            viewBox="0 0 18 20"
-          >
-            <path d="m17.914 18.594-8-18a1 1 0 0 0-1.828 0l-8 18a1 1 0 0 0 1.157 1.376L8 18.281V9a1 1 0 0 1 2 0v9.281l6.758 1.689a1 1 0 0 0 1.156-1.376Z" />
-          </svg>
+    <div class="p-4 border-t border-gray-200">
+      <div class="flex items-center">
+        <input
+          v-model="newMessage"
+          @keyup.enter="sendMessage"
+          type="text"
+          placeholder="Type a message..."
+          class="flex-1 p-2 bg-gray-100 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button @click="sendMessage" class="px-4 py-2 bg-blue-500 text-white rounded-r-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          Send
         </button>
       </div>
     </div>
@@ -48,38 +28,102 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { io, Socket } from 'socket.io-client';
+import { useAuth } from '@/composables/useAuth';
 
-// 메시지 상태를 관리하는 변수
-const message = ref('');
-const messages = ref<string[]>([
-  'tlqkf1',
-]);
+const emit = defineEmits(['update:users']);
 
-// 채팅 리스트 끝으로 스크롤을 내리는 함수
-const scrollToBottom = () => {
-  const chatList = document.querySelector('.flex-1') as HTMLElement;
-  chatList.scrollTop = chatList.scrollHeight;
-};
+const props = defineProps<{
+  boardId: string;
+}>();
 
-// 메시지를 보내는 함수
-const sendMessage = () => {
-  if (!message.value.trim()) {
-    alert('메시지를 입력해주세요!');
-    return;
-  }
-  // 새 메시지를 배열에 추가
-  messages.value.push(message.value);
-  message.value = ''; // 입력창 초기화
-  nextTick(() => {
-    scrollToBottom(); // 새로운 메시지를 추가한 후 스크롤을 맨 아래로
-  });
-};
+const { token, user } = useAuth();
+const messages = ref<Message[]>([]);
+const users = ref<string[]>([]);
+const newMessage = ref('');
+let socket: Socket;
 
-// 컴포넌트가 마운트된 후 초기 스크롤 위치를 맨 아래로 설정
+interface Message {
+  text: string;
+  isMine: boolean;
+  author: string;
+  createdAt: Date;
+}
+
+interface MessagePayload {
+  message: string;
+  author: string;
+  createdAt: Date;
+}
+
 onMounted(() => {
-  nextTick(() => {
-    scrollToBottom();
+  socket = io('http://localhost:3000', {
+    auth: {
+      token: token.value,
+    },
+  });
+
+  socket.on('connect', () => {
+    console.log(`Socket connected with id: ${socket.id}`);
+    // On connection, join the room for the current board
+    if (props.boardId) {
+      socket.emit('joinRoom', props.boardId);
+      console.log(`Joined room on connect: ${props.boardId}`);
+    }
+  });
+
+  socket.on('newMessage', (payload: MessagePayload) => {
+    console.log('Received message payload:', payload);
+    const isMine = payload.author === user.value?.username;
+    messages.value.push({ text: payload.message, isMine, ...payload });
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected.');
+  });
+  
+  socket.on('connect_error', (error) => {
+    console.error('Socket connection error:', error);
+  });
+
+  socket.on('updateUserList', (userList: string[]) => {
+    users.value = userList;
+    emit('update:users', userList);
   });
 });
+
+onUnmounted(() => {
+  if (socket) {
+    socket.disconnect();
+  }
+});
+
+// Watch for route changes to switch rooms
+watch(() => props.boardId, (newRoomId, oldRoomId) => {
+  if (socket && socket.connected && newRoomId !== oldRoomId) {
+    if (oldRoomId) {
+      socket.emit('leaveRoom', oldRoomId);
+      console.log(`Left room: ${oldRoomId}`);
+    }
+    messages.value = []; // Clear messages when changing room
+    socket.emit('joinRoom', newRoomId);
+    console.log(`Switched to room: ${newRoomId}`);
+  }
+});
+
+const sendMessage = () => {
+  if (newMessage.value.trim() !== '' && socket && socket.connected) {
+    const payload = {
+      room: props.boardId,
+      message: newMessage.value,
+    };
+    socket.emit('sendMessage', payload);
+    newMessage.value = '';
+  }
+};
 </script>
+
+<style scoped>
+/* You can add component-specific styles here if needed */
+</style>
